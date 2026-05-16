@@ -1,0 +1,107 @@
+version: "3.9"
+
+volumes:
+  thermo_data:
+    driver: local
+
+services:
+
+  # ── Container 1: FEniCSx — parametric FOM sweep ───────────────────────
+  simulation:
+    build:
+      context: ./simulation
+      dockerfile: Dockerfile
+    image: thermo-simulation:latest
+    container_name: thermo_simulation
+    volumes:
+      - thermo_data:/workspace/data
+      - ./simulation:/workspace/simulation   # bind-mount — edits live immediately
+    command: python3 run_parametric.py
+    restart: "no"
+
+  # ── Container 2: ROM · Kalman · Bayesian · Dashboard ─────────────────
+  data_driven:
+    build:
+      context: ./data_driven
+      dockerfile: Dockerfile
+    image: thermo-data-driven:latest
+    container_name: thermo_data_driven
+    volumes:
+      - thermo_data:/workspace/data
+      - ./data_driven:/workspace/data_driven  # bind-mount — edits live immediately
+    ports:
+      - "8501:8501"
+    depends_on:
+      simulation:
+        condition: service_completed_successfully
+    restart: "no"
+    environment:
+      - XLA_FLAGS=--xla_cpu_multi_thread_eigen_intra_op_parallelism=4
+      - JAX_PLATFORMS=cpu
+      - PYTHONUNBUFFERED=1
+    command: >-
+      bash -c "cd /workspace/data_driven &&
+               python3 train_rom.py &&
+               python3 bayesian_inference.py --draws 500 --tune 500 --chains 4 --retrain-gp &&
+               python3 field_reconstruction.py &&
+               python3 posterior_analysis.py &&
+               streamlit run dashboard.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true"
+
+  # ── Profile: bayesian — re-run only MCMC (ROM already built) ─────────
+  # Usage:  docker compose --profile bayesian run --rm bayesian
+  bayesian:
+    build:
+      context: ./data_driven
+      dockerfile: Dockerfile
+    image: thermo-data-driven:latest
+    container_name: thermo_bayesian
+    profiles: [bayesian]
+    volumes:
+      - thermo_data:/workspace/data
+      - ./data_driven:/workspace/data_driven  # bind-mount
+    restart: "no"
+    environment:
+      - XLA_FLAGS=--xla_cpu_multi_thread_eigen_intra_op_parallelism=4
+      - JAX_PLATFORMS=cpu
+    command: >-
+      bash -c "cd /workspace/data_driven &&
+               python3 bayesian_inference.py --draws 2000 --tune 1000 --chains 4 &&
+               python3 field_reconstruction.py &&
+               python3 posterior_analysis.py"
+
+  # ── Profile: train — ROM + Kalman only, no Bayesian, no dashboard ─────
+  # Usage:  docker compose --profile train run --rm train
+  train:
+    build:
+      context: ./data_driven
+      dockerfile: Dockerfile
+    image: thermo-data-driven:latest
+    container_name: thermo_train
+    profiles: [train]
+    volumes:
+      - thermo_data:/workspace/data
+      - ./data_driven:/workspace/data_driven  # bind-mount
+    restart: "no"
+    environment:
+      - XLA_FLAGS=--xla_cpu_multi_thread_eigen_intra_op_parallelism=4
+      - JAX_PLATFORMS=cpu
+    command: >-
+      bash -c "cd /workspace/data_driven && python3 train_rom.py"
+
+  # ── Profile: sanity — run sanity checks before SMC ───────────────────
+  # Usage:  docker compose --profile sanity run --rm sanity
+  sanity:
+    build:
+      context: ./data_driven
+      dockerfile: Dockerfile
+    image: thermo-data-driven:latest
+    container_name: thermo_sanity
+    profiles: [sanity]
+    volumes:
+      - thermo_data:/workspace/data
+      - ./data_driven:/workspace/data_driven  # bind-mount
+    restart: "no"
+    environment:
+      - JAX_PLATFORMS=cpu
+    command: >-
+      bash -c "cd /workspace/data_driven && python3 sanity_check.py"

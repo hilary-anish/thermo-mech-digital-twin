@@ -1,0 +1,4 @@
+# The dolfinx/dolfinx:v0.8.0 base image already provides:
+#   numpy, scipy, matplotlib, mpi4py, petsc4py, dolfinx, ufl, basix, ffcx
+# Nothing extra is required for the simulation container.
+# This file is kept so the Dockerfile COPY step doesn't fail.

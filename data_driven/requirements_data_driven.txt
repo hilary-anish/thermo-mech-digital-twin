@@ -1,0 +1,25 @@
+# Core numerics
+numpy>=1.24
+scipy>=1.11
+matplotlib>=3.7
+
+# JAX differentiable ROM surrogate
+# jax[cpu] installs the correct jaxlib automatically.
+# Do NOT list jaxlib separately — it causes pip version conflicts.
+jax[cpu]>=0.4.20
+
+# GP emulator
+scikit-learn>=1.3
+joblib>=1.3
+
+# Bayesian inference
+pymc>=5.10
+pytensor>=2.18
+arviz>=0.17
+
+# Dashboard
+streamlit>=1.28
+plotly>=5.15
+
+# Utilities
+tqdm
