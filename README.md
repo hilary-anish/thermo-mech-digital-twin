@@ -260,7 +260,7 @@ N_U_SENSORS = 3   # strain sensors
 ## Author
 
 **Anish Hilary Ignatius**  
-MSc Computational Mechanics  
+Researcher · Computational Mechanics · Machine Learning  
 
 ---
 
